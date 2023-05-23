@@ -652,7 +652,7 @@ double Evaluator::d(int ddim, const std::vector<double> &coord, int fn) const{
 			d[n_dim-1] = y2[n_dim-1] * d[n_dim-1] - dd[n_dim-1] + data[indx];
 			dd[n_dim-1] = sv;
 		}
-		else{	
+		else{
 			reslt = 0.5 * y2[n_dim-1] * d[n_dim-1] - dd[n_dim-1] + 0.5 * data[indx];
 
 			for(int dim = n_dim-2, tmpi = ind; dim >= 0; dim--){
@@ -718,8 +718,93 @@ double Evaluator::d(int ddim, const std::vector<double> &coord, int fn) const{
 			reslt_der *= 4.0*xorig[ddim];
 	}
 
-	return reslt_der; 
+	return reslt_der;
 }
+
+std::vector<double> Evaluator::integrate() const{
+	std::vector<double> total_sum(nfunc, 0.0);
+
+	for(const Bulk_Domain *dom = first_bulk_domain; dom != NULL; dom = dom->next_bulk_domain()){
+		std::vector<std::vector<double>> part_sum(n_dim);
+		std::fill(part_sum.begin(), part_sum.end(), std::vector<double>(nfunc, 0.0));
+
+		int ind = index_st[dom->bulk_domain_number];
+		std::vector<int> indx(n_dim), nx_run(dom->dim_num());
+		for(int dim = n_dim-1, tmp = nfunc; dim >= 0; --dim){
+			if((parity_st[dim].empty() || std::fabs(dom->domain_start(dim) - partition_start(dim)) > COMP_TOL) &&
+				(parity_end[dim].empty() || std::fabs(dom->domain_end(dim) - partition_end(dim)) > COMP_TOL))
+			{
+				nx_run[dim] = nx_run[dim]/2 + nx_run[dim]%2;
+				ind += 2*(nx_run[dim]-1)*tmp;
+			}
+			else
+				ind += (nx_run[dim]-1)*tmp;
+			indx[dim] = nx_run[dim]-1;
+			tmp *= dom->dim_num(dim);
+		}
+
+		while(1){
+			for(int fn = 0; fn < nfunc; ++fn){
+				if(indx[n_dim-1]){
+					if(nx_run[n_dim-1] != dom->dim_num(n_dim-1) || ((parity_st[n_dim-1].empty() || !parity_st[n_dim-1][fn]) &&
+						(parity_end[n_dim-1].empty() || !parity_end[n_dim-1][fn])))
+					{
+						part_sum[n_dim-1][fn] -= data[ind+fn]/(4.0*indx[n_dim-1]*indx[n_dim-1] - 1.0);
+					}
+					else if(indx[n_dim-1]%2 == 0)
+						part_sum[n_dim-1][fn] -= data[ind+fn]/(indx[n_dim-1]*indx[n_dim-1] - 1.0);
+				}
+				else
+					part_sum[n_dim-1][fn] += 0.5*data[ind+fn];
+			}
+
+			int dim, tmp;
+			for(dim = n_dim-1, tmp = nfunc; dim >= 0; --dim){
+				--indx[dim];
+				if(nx_run[dim] == dom->dim_num(dim)) ind -= tmp;
+				else ind -= 2*tmp;
+				if(indx[dim] >= 0) break;
+
+				if(dim){
+					for(int fn = 0; fn < nfunc; ++fn){
+						if(indx[dim-1]){
+							if(nx_run[dim-1] != dom->dim_num(dim-1) || ((parity_st[dim-1].empty() || !parity_st[dim-1][fn]) &&
+								(parity_end[dim-1].empty() || !parity_end[dim-1][fn])))
+							{
+								part_sum[dim-1][fn] -= part_sum[dim][fn]/(4.0*indx[dim-1]*indx[dim-1] - 1.0);
+							}
+							else if(indx[dim-1]%2 == 0)
+								part_sum[dim-1][fn] -= part_sum[dim][fn]/(indx[dim-1]*indx[dim-1] - 1.0);
+						}
+						else
+							part_sum[dim-1][fn] += 0.5*part_sum[dim][fn];
+						part_sum[dim][fn] = 0.0;
+					}
+				}
+
+				indx[dim] = nx_run[dim]-1;
+				if(nx_run[dim] == dom->dim_num(dim)) ind += nx_run[dim]*tmp;
+				else ind += 2*nx_run[dim]*tmp;
+				tmp *= dom->dim_num(dim);
+			}
+			if(dim < 0) break;
+		}
+
+		for(int dim = 0; dim < n_dim; ++dim){
+			double factor = dom->domain_end(dim) - dom->domain_start(dim);
+			for(int fn = 0; fn < nfunc; ++fn){
+				part_sum[0][fn] *= factor;
+				if(!parity_st[dim].empty() && parity_st[dim][fn] && std::fabs(dom->domain_start(dim) - partition_start(dim)) < COMP_TOL)
+					part_sum[0][fn] *= -0.5;
+				if(!parity_end[dim].empty() && parity_end[dim][fn] && std::fabs(dom->domain_end(dim) - partition_end(dim)) < COMP_TOL)
+					part_sum[0][fn] *= 0.5;
+			}
+		}
+
+		for(int fn = 0; fn < nfunc; ++fn) total_sum[fn] += part_sum[0][fn];
+	}
+	return total_sum;
+};
 
 double Evaluator::test(const Container &cont, int der){
 	int indx = 0, i;
@@ -739,8 +824,6 @@ double Evaluator::test(const Container &cont, int der){
 				if(i) break;
 				tmpi /= dom->dim_num(dim);
 			}
-			// auto der_res = d(der, coord, 0);
-			// std::cout << cont.data[indx] << ',' << der_res.second << std::endl;
 			for(int fn = 0; fn < nfunc; fn++){
 				if(der < 0)
 					tmp = std::fabs(cont.data[indx++] - (*this)(coord, fn));

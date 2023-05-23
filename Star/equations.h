@@ -229,14 +229,14 @@ public:
 	double densities(int fn, double *x, double *phi, double **dphi, double **ddphi) const{
 		double sin_th = sin(x[1]);
 		switch(fn){
-			case 0://This is ADM \rho = T_{\mu\nu} n^\mu n^\nu energy density
-				return exp(-phi[0])*(exp(-phi[1])*pow(omega + m_ang*phi[3], 2.0) + exp(phi[1])*m_ang*m_ang/pow(x[0]*sin_th, 2.0))*phi[4]*phi[4] + exp(-2.0*phi[2])*(pow(dphi[0][4], 2.0) + pow(dphi[1][4]/x[0], 2.0)) + vpot(phi[4]*phi[4]);
+			case 0://This is Komar density
+				return exp(2.0*phi[2])*(2.0*exp(-phi[1])*omega*(omega + m_ang*phi[3])*phi[4]*phi[4] - exp(phi[0])*vpot(phi[4]*phi[4]));
 				break;
 			case 1://This is charge density j_\mu n^\mu
 				return exp(2.0*phi[2] - phi[1])*(omega + m_ang*phi[3])*phi[4]*phi[4];
 				break;
-			case 2://This is Komar density
-				return exp(2.0*phi[2])*(2.0*exp(-phi[1])*omega*(omega + m_ang*phi[3])*phi[4]*phi[4] - exp(phi[0])*vpot(phi[4]*phi[4]));
+			case 2://This is ADM \rho = T_{\mu\nu} n^\mu n^\nu energy density
+				return exp(-phi[0])*(exp(-phi[1])*pow(omega + m_ang*phi[3], 2.0) + exp(phi[1])*m_ang*m_ang/pow(x[0]*sin_th, 2.0))*phi[4]*phi[4] + exp(-2.0*phi[2])*(pow(dphi[0][4], 2.0) + pow(dphi[1][4]/x[0], 2.0)) + vpot(phi[4]*phi[4]);
 				break;
 			default:
 				std::cout << "Wrong density number" << std::endl;

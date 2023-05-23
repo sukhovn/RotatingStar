@@ -50,6 +50,8 @@ public:
 
 	double d(int dim, const std::vector<double> &coord, int fn) const;
 
+	std::vector<double> integrate() const;
+
 	double test(const Container &cont, int der = -1);
 
 	friend class Container;

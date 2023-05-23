@@ -44,9 +44,9 @@ public:
 	bool verify_container_solution_correspondence(void){
 		if(compare_bulk_domains(*cont)) return false;
 		Domain_Partitioning part(*cont);
-		if(!boundary_domains_present()){
-			fill_boundary_domains(*this);
-		}
+		if(part.boundary_domains_present())
+			part.clear_boundary_domains();
+		fill_boundary_domains(part);
 		this->Domain_Partitioning::operator=(part);
 		return true;
 	}
@@ -81,6 +81,42 @@ public:
 				}
 			}
 		}
+	}
+
+	template<class Callable>
+	Container evaluate_function(Callable &func, int nfunc_fill, double value_at_infinity = 0.0){
+		verify_container_solution_correspondence();
+
+		Container result(nfunc_fill, cont->partition);
+		for(int dim = 0; dim < n_dim; ++dim){
+			if(!cont->parity_st[dim].empty()) result.parity_st[dim] = std::vector<bool>(nfunc_fill, false);
+		}
+		for(int dim = 0; dim < n_dim; ++dim){
+			if(!cont->parity_end[dim].empty()) result.parity_end[dim] = std::vector<bool>(nfunc_fill, false);
+		}
+
+		int indx = 0;
+		for(const Bulk_Domain *dom = first_bulk_domain; dom != NULL; dom = dom->next_bulk_domain()){
+			std::vector<unsigned int> ind(n_dim);
+
+			for(int dindx = 0; dindx < dom->size; dindx++){
+				for(int i = n_dim-1, tmpi = dindx; i >= 0; i--){
+					if(ind[i] = (tmpi % dom->dim_num(i))) break;
+					tmpi /= dom->dim_num(i);
+				}
+				if(pnt.get_point(dom->bulk_domain_number, ind, true)){
+					for(int fn = 0; fn < nfunc_fill; ++fn)
+						result.data[indx++] = value_at_infinity;
+				}
+				else{
+					for(int fn = 0; fn < nfunc_fill; ++fn){
+						result.data[indx++] = func(fn, pnt.x, pnt.phi, pnt.dphi, pnt.ddphi);
+					}
+				}
+			}
+		}
+
+		return result;
 	}
 };
 
