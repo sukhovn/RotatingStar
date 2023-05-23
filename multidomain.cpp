@@ -62,7 +62,7 @@ void star_test(int argc, char const *argv[]){
 	// m_change(solver, 3);
 
 	if(!folder_out.empty()){
-		star.save(folder_out);
+		solver.star_save(folder_out);
 		// solver.plot_polar_cut(folder_out + "_plot", plsize, plsize);
 	}
 }

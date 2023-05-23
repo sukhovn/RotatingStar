@@ -310,8 +310,8 @@ public:
 		for(int i = 0; i < n_dim; i++)
 			if(std::isinf(x[i])) return true;
 		for(int i = 0; i < n_dim; i++){
-			dx[i] = compact.dxc(i, x_c);
-			ddx[i] = compact.ddxc(i, x_c);
+			dx[i] = compact.dxc(curr_domain->bulk_domain_number, i, x_c);
+			ddx[i] = compact.ddxc(curr_domain->bulk_domain_number, i, x_c);
 		}
 
 		Point::get_derivatives(compute_mixed_derivatives);

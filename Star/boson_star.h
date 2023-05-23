@@ -94,11 +94,10 @@ public:
 		auto density_function = [this](int fn, double *x, double *phi, double **dphi, double **ddphi)
 		{
 			if(x[0] == 0.0 || x[1] == 0) return 0.0;
-			double xc = xc_inv(0, x);
 			double factor = 1.0;
 			if(fn == 1) factor = star->m_ang;
 			if(fn == 2) factor = std::exp(2.0 * phi[2] + 0.5 * (phi[0] - phi[1]));
-			return star->kappa*factor*star->densities(fn, x, phi, dphi, ddphi)*star->area_element(x)*dxc(0, &xc);
+			return star->kappa*factor*star->densities(fn, x, phi, dphi, ddphi)*star->area_element(x)*dxc_factor(xc_inv(0, x));
 		};
 
 		Container densities = evaluate_function(density_function, 3, 0.0);
@@ -112,10 +111,79 @@ public:
 		star->params["komar_momentum"] = charges[1];
 		star->params["adm_energy"] = charges[2];
 
+		//Calculating Komar mass and radius
+		// struct Komar_Mass_Integrand{
+		// 	Boson_Star *star;
+		// 	Komar_Mass_Integrand(Boson_Star *stari): star(stari) {};
+		// 	double operator()(double *x, double *phi, double **dphi, double **ddphi) const{
+		// 		if(x[0] == 0.0 || x[1] == 0.0)
+		// 			return 0.0;
+		// 		else
+		// 			return star->kappa*star->densities(2, x, phi, dphi, ddphi)*star->area_element(x);
+		// 	}
+		// } komar_mass_int(star);
+
+		// Evaluator_1D_Spec komar_mass_eval(density_extrapolation_resolution);
+		// fill_integral<Radial_Compactification>(komar_mass_eval, *this, komar_mass_int, 0);
+
+		// star->komar_mass = komar_mass_eval(partition.partition_end(0));
+		// Secant_Spec komar_mass_radius_eval(komar_mass_eval);
+		// star->coordinate_komar_radius = 0.5*partition.partition_end(0);
+		// komar_mass_radius_eval.solve(&star->coordinate_komar_radius, RAD_FRACTION*star->komar_mass);
+		// star->radius_komar = metric_prefactor({star->coordinate_komar_radius, M_PI_2}, 0)*xc(0, &star->coordinate_komar_radius);
+
+		// //Calculating Komar angular momentum and charge radius
+		// struct Komar_Momentum_Integrand{
+		// 	Boson_Star *star;
+		// 	Komar_Momentum_Integrand(Boson_Star *stari): star(stari) {};
+		// 	double operator()(double *x, double *phi, double **dphi, double **ddphi) const{
+		// 		if(x[0] == 0.0 || x[1] == 0.0)
+		// 			return 0.0;
+		// 		else
+		// 			return star->kappa*star->m_ang*star->densities(1, x, phi, dphi, ddphi)*star->area_element(x);
+		// 	}
+		// } komar_momentum_int(star);
+
+		// Evaluator_1D_Spec komar_momentum_eval(density_extrapolation_resolution);
+		// fill_integral<Radial_Compactification>(komar_momentum_eval, *this, komar_momentum_int, 0);
+
+		// star->komar_momentum = komar_momentum_eval(partition.partition_end(0));
+		// Secant_Spec komar_charge_radius_eval(komar_momentum_eval);
+		// star->radius_charge = 0.5*partition.partition_end(0);
+		// komar_charge_radius_eval.solve(&star->radius_charge, RAD_FRACTION*star->komar_momentum);
+		// star->radius_charge = metric_prefactor({star->radius_charge, M_PI_2}, 0)*xc(0, &star->radius_charge);
+
+		// //Calculating ADM energy and energy radius
+		// struct ADM_Energy_Integrand{
+		// 	Boson_Star *star;
+		// 	ADM_Energy_Integrand(Boson_Star *stari): star(stari) {};
+		// 	double operator()(double *x, double *phi, double **dphi, double **ddphi) const{
+		// 		if(x[0] == 0.0 || x[1] == 0.0)
+		// 			return 0.0;
+		// 		else{
+		// 			double tmp = std::exp(2.0 * phi[2] + 0.5 * (phi[0] - phi[1]));
+		// 			return star->kappa*tmp*star->densities(0, x, phi, dphi, ddphi)*star->area_element(x);
+		// 		}
+		// 	}
+		// } adm_energy_int(star);
+
+		// Evaluator_1D_Spec adm_energy_eval(density_extrapolation_resolution);
+		// fill_integral<Radial_Compactification>(adm_energy_eval, *this, adm_energy_int, 0);
+
+		// star->adm_energy = adm_energy_eval(partition.partition_end(0));
+		// Secant_Spec adm_energy_radius_eval(adm_energy_eval);
+		// star->radius_energy = 0.5*partition.partition_end(0);
+		// adm_energy_radius_eval.solve(&star->radius_energy, RAD_FRACTION*star->adm_energy);
+		// star->radius_energy = metric_prefactor({star->radius_energy, M_PI_2}, 0)*xc(0, &star->radius_energy);
+
 		//Printing out masses and radii
 		std::cout << "Komar mass is: " << star->params["komar_mass"] << std::endl;
 		std::cout << "Komar angular momentum is: " << star->params["komar_momentum"] << std::endl;
 		std::cout << "ADM energy is: " << star->params["adm_energy"] << std::endl;
+
+		// std::cout << "Komar radius estimate is: " << star->radius_komar << std::endl;
+		// std::cout << "Charge radius estimate is: " << star->radius_charge << std::endl;
+		// std::cout << "ADM energy radius estimate is: " << star->radius_energy << std::endl;
 
 		//Calculating maximal scalar field value
 		struct{
@@ -189,6 +257,19 @@ public:
 
 		find_star_parameters();
 		return 0;
+	}
+
+	void star_save(const std::string &folder_name){
+		star->save(folder_name);
+
+		auto residuals_function = [this](int fn, double *x, double *phi, double **dphi, double **ddphi)
+		{
+			if(x[0] == 0.0 || x[1] == 0) return 0.0;
+			return star->residuals(fn, x, phi, dphi, ddphi);
+		};
+
+		Container residuals = evaluate_function(residuals_function, 2, 0.0);
+		residuals.save(folder_name + "/residuals");
 	}
 
 	// void plot_polar_cut(const char *folder_name, int nr, int nz);

@@ -34,7 +34,7 @@ int main(int argc, char const *argv[]){
 	solver.solve();
 
 	if(!folder_name.empty()){
-		star.save(folder_name);
+		solver.star_save(folder_name);
 	}
 
 	return 0;

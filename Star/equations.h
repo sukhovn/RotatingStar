@@ -11,18 +11,24 @@ private:
 	double xst;
 	double cc;
 
+	std::vector<bool> domains_compactified;
 public:
-	Radial_Compactification(double _xst, double _xend): xst(_xst), cc(1.0/(_xend - _xst)) {};
-
 	Radial_Compactification(const Domain_Partitioning &part, bool print_selection = false): xst(part.partition_start(0)) {
+		int ndomains = 0;
 		double xend = part.partition_end(0);
 		for(const Bulk_Domain *dom = part.first_bulk_domain; dom != NULL; dom = dom->next_bulk_domain()){
 			if(dom->domain_start(0) > xst) xst = dom->domain_start(0);
+			++ndomains;
+			domains_compactified.push_back(false);
 		}
 		if(print_selection){
 			std::cout << "Selected compactification region: [" << xst << ',' << xend << ']' << std::endl;
 		}
 		cc = 1.0/(xend - xst);
+		for(const Bulk_Domain *dom = part.first_bulk_domain; dom != NULL; dom = dom->next_bulk_domain()){
+			if(dom->domain_end(0) > xst + COMP_TOL)
+				domains_compactified[dom->bulk_domain_number] = true;
+		}
 	}
 
 	double xc(int dm, double *x) const{
@@ -36,10 +42,17 @@ public:
 			return x[dm];
 	}
 
-	double dxc(int dm, double *x) const{
+	double dxc_factor(double x) const{
+		double xshift = x - xst;
+		if(xshift*cc >= 1.0) return std::numeric_limits<double>::infinity();
+		return 1.0/std::pow(1 - xshift*cc, 2.0);
+	}
+
+	double dxc(int dnum, int dm, double *x) const{
+		if(!domains_compactified[dnum])
+			return 1.0;
 		if(dm == 0){
 			double xshift = x[0] - xst;
-			if(xshift <= 0.0) return 1.0;
 			if(xshift*cc >= 1.0) return std::numeric_limits<double>::infinity();
 			return 1.0/std::pow(1 - xshift*cc, 2.0);
 		}
@@ -47,12 +60,13 @@ public:
 			return 1.0;
 	}
 
-	double ddxc(int dm, double *x) const{
+	double ddxc(int dnum, int dm, double *x) const{
+		if(!domains_compactified[dnum])
+			return 0.0;
 		if(dm == 0){
 			double xshift = x[0] - xst;
-			if(xshift <= 0.0) return 0.0;
 			if(xshift*cc == 1.0) return std::numeric_limits<double>::infinity();
-			return 2.0 * cc/std::pow(1 - xshift*cc, 3.0);
+			return 2.0*cc/std::pow(1 - xshift*cc, 3.0);
 		}
 		else
 			return 0.0;
