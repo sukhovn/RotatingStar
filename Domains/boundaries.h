@@ -539,6 +539,52 @@ public:
 		}
 	}
 
+	//Assembles domains into partitioning
+	Domain_Partitioning(const std::vector<std::vector<double>> &domains_start,
+						const std::vector<std::vector<double>> &domains_end,
+						const std::vector<std::vector<int>> &dim_nums):
+		Domain_Partitioning()
+	{
+		if(domains_start.size() != domains_end.size() || domains_start.size() != dim_nums.size()){
+			std::cout << "Dimensions of arrays are inconsistent in Domain Partitioning constructor" << std::endl;
+			throw("Dimensions of arrays inconsistent");
+		}
+		if(domains_start.size() == 0){
+			std::cout << "No domains provided to Domain Partitioning constructor" << std::endl;
+			throw("No domains provided");
+		}
+
+		Bulk_Domain *domain_tmp;
+		std::vector<double> lengths(domains_start[0].size());
+		for(int dm = 0; dm < domains_start.size(); dm++){
+			if(domains_start[dm].size() != domains_start[0].size() || domains_end[dm].size() != domains_start[0].size()){
+				std::cout << "Dimensions of domains are inconsistent in Domain Partitioning constructor" << std::endl;
+				throw("Dimensions of domains inconsistent");
+			}
+			for(int i = 0; i < domains_start[dm].size(); ++i)
+				lengths[i] = domains_end[dm][i] - domains_start[dm][i];
+			if(first_dom == NULL){
+				first_dom = first_bulk_dom = domain_tmp = new Bulk_Domain(domains_start[dm], lengths, dim_nums[dm]);
+				ndim = domain_tmp->ndim;
+				part_start = domain_tmp->dom_start;
+				part_end = domain_tmp->dom_end;
+			}
+			else{
+				domain_tmp->dom_next = domain_tmp->dom_bulk_next = new Bulk_Domain(domains_start[dm], lengths, dim_nums[dm]);
+				(domain_tmp->dom_bulk_next)->dom_prev = (domain_tmp->dom_bulk_next)->dom_bulk_prev = domain_tmp;
+				domain_tmp = domain_tmp->dom_bulk_next;
+			}
+			domain_tmp->b_dom_number = dm;
+			for(int i = 0; i < ndim; i++){
+				part_start[i] = (domain_tmp->dom_start[i] < part_start[i] ? domain_tmp->dom_start[i] : part_start[i]);
+				part_end[i] = (domain_tmp->dom_end[i] > part_end[i] ? domain_tmp->dom_end[i] : part_end[i]);
+			}
+		}
+
+		verify_ordering();
+		verify_consistency();
+	}
+
 	//Loads boundary domain partitioning
 	Domain_Partitioning(const std::string &file_name): Domain_Partitioning(){
 		load_domains(file_name);

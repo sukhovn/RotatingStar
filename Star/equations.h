@@ -13,8 +13,9 @@ private:
 
 	std::vector<bool> domains_compactified;
 public:
-	Radial_Compactification(const Domain_Partitioning &part, bool print_selection = false): xst(part.partition_start(0)) {
+	void adjust_compactification(const Domain_Partitioning &part, bool print_selection = false){
 		int ndomains = 0;
+		xst = part.partition_start(0);
 		double xend = part.partition_end(0);
 		for(const Bulk_Domain *dom = part.first_bulk_domain; dom != NULL; dom = dom->next_bulk_domain()){
 			if(dom->domain_start(0) > xst) xst = dom->domain_start(0);
@@ -31,6 +32,10 @@ public:
 		}
 	}
 
+	Radial_Compactification(const Domain_Partitioning &part, bool print_selection = false){
+		adjust_compactification(part, print_selection);
+	}
+
 	double xc(int dm, double *x) const{
 		if(dm == 0){
 			double xshift = x[0] - xst;
@@ -44,6 +49,7 @@ public:
 
 	double dxc_factor(double x) const{
 		double xshift = x - xst;
+		if(xshift <= 0.0) return 1.0;
 		if(xshift*cc >= 1.0) return std::numeric_limits<double>::infinity();
 		return 1.0/std::pow(1 - xshift*cc, 2.0);
 	}
