@@ -3,6 +3,7 @@
 #include <collocation_routines.h>
 #include <collocation_solver_full.h>
 #include <equations.h>
+#include <min_root.h>
 #include <unordered_map>
 
 #ifndef BOSON_STAR_H
@@ -18,7 +19,6 @@ public:
 	std::unordered_map<std::string, double> params;
 
 	std::vector<double> residual_error;
-	double coordinate_komar_radius;
 	double ps_length;
 
 	//Standard constructor
@@ -111,79 +111,56 @@ public:
 		star->params["komar_momentum"] = charges[1];
 		star->params["adm_energy"] = charges[2];
 
-		//Calculating Komar mass and radius
-		// struct Komar_Mass_Integrand{
-		// 	Boson_Star *star;
-		// 	Komar_Mass_Integrand(Boson_Star *stari): star(stari) {};
-		// 	double operator()(double *x, double *phi, double **dphi, double **ddphi) const{
-		// 		if(x[0] == 0.0 || x[1] == 0.0)
-		// 			return 0.0;
-		// 		else
-		// 			return star->kappa*star->densities(2, x, phi, dphi, ddphi)*star->area_element(x);
-		// 	}
-		// } komar_mass_int(star);
+		//Finding partial integral of densities to find radii
+		int int_size = density_extrapolation_resolution;
+		double xst = partition_start(0), xend = partition_end(0);
+		double *xrange = new double[int_size];
+		ch_x_array(xst, xend, int_size-1, xrange);
+		double *density_integrals = new double[3*int_size];
+		densities_eval.integrate_keep_first_dimension(int_size, xrange, density_integrals);
 
-		// Evaluator_1D_Spec komar_mass_eval(density_extrapolation_resolution);
-		// fill_integral<Radial_Compactification>(komar_mass_eval, *this, komar_mass_int, 0);
+		//Performing FFT to find spectra
+		fftw_r2r_kind kind = FFTW_REDFT00;
+		fftw_plan planCOS = fftw_plan_many_r2r(1, &int_size, 3,
+									density_integrals, NULL, 1, int_size,
+									density_integrals, NULL, 1, int_size, &kind, FFTW_ESTIMATE);
+		fftw_execute_r2r(planCOS, density_integrals, density_integrals);
+		fftw_destroy_plan(planCOS);
 
-		// star->komar_mass = komar_mass_eval(partition.partition_end(0));
-		// Secant_Spec komar_mass_radius_eval(komar_mass_eval);
-		// star->coordinate_komar_radius = 0.5*partition.partition_end(0);
-		// komar_mass_radius_eval.solve(&star->coordinate_komar_radius, RAD_FRACTION*star->komar_mass);
-		// star->radius_komar = metric_prefactor({star->coordinate_komar_radius, M_PI_2}, 0)*xc(0, &star->coordinate_komar_radius);
+		for(int i = 0; i < 3*int_size; ++i)
+			density_integrals[i] = density_integrals[i]/(1.0*(int_size-1));
+		for(int i = 0; i < 3; ++i){
+			double *spect = density_integrals + int_size*i;
+			cheb_int(xst, xend, spect, int_size-1, spect);
+			spect[0] -= 2.0*chebev(xst, xend, spect, int_size, xst);
+		}
 
-		// //Calculating Komar angular momentum and charge radius
-		// struct Komar_Momentum_Integrand{
-		// 	Boson_Star *star;
-		// 	Komar_Momentum_Integrand(Boson_Star *stari): star(stari) {};
-		// 	double operator()(double *x, double *phi, double **dphi, double **ddphi) const{
-		// 		if(x[0] == 0.0 || x[1] == 0.0)
-		// 			return 0.0;
-		// 		else
-		// 			return star->kappa*star->m_ang*star->densities(1, x, phi, dphi, ddphi)*star->area_element(x);
-		// 	}
-		// } komar_momentum_int(star);
+		//Evaluating Komar radius
+		double *spec = density_integrals, rad;
+		secant_solve([&xst, &xend, &spec, &int_size, &charges](double x){return chebev(xst, xend, spec, int_size, x) - RAD_FRACTION*charges[0];}, xst, xend, &rad);
+		star->params["radius_komar"] = metric_prefactor({rad, M_PI_2}, 0)*xc(0, &rad);
 
-		// Evaluator_1D_Spec komar_momentum_eval(density_extrapolation_resolution);
-		// fill_integral<Radial_Compactification>(komar_momentum_eval, *this, komar_momentum_int, 0);
+		//Evaluating charge radius
+		spec = density_integrals+int_size;
+		secant_solve([&xst, &xend, &spec, &int_size, &charges](double x){return chebev(xst, xend, spec, int_size, x) - RAD_FRACTION*charges[1];}, xst, xend, &rad);
+		star->params["radius_charge"] = metric_prefactor({rad, M_PI_2}, 0)*xc(0, &rad);
 
-		// star->komar_momentum = komar_momentum_eval(partition.partition_end(0));
-		// Secant_Spec komar_charge_radius_eval(komar_momentum_eval);
-		// star->radius_charge = 0.5*partition.partition_end(0);
-		// komar_charge_radius_eval.solve(&star->radius_charge, RAD_FRACTION*star->komar_momentum);
-		// star->radius_charge = metric_prefactor({star->radius_charge, M_PI_2}, 0)*xc(0, &star->radius_charge);
+		//Evaluating energy radius
+		spec = density_integrals+2*int_size;
+		secant_solve([&xst, &xend, &spec, &int_size, &charges](double x){return chebev(xst, xend, spec, int_size, x) - RAD_FRACTION*charges[2];}, xst, xend, &rad);
+		star->params["radius_adm"] = metric_prefactor({rad, M_PI_2}, 0)*xc(0, &rad);
 
-		// //Calculating ADM energy and energy radius
-		// struct ADM_Energy_Integrand{
-		// 	Boson_Star *star;
-		// 	ADM_Energy_Integrand(Boson_Star *stari): star(stari) {};
-		// 	double operator()(double *x, double *phi, double **dphi, double **ddphi) const{
-		// 		if(x[0] == 0.0 || x[1] == 0.0)
-		// 			return 0.0;
-		// 		else{
-		// 			double tmp = std::exp(2.0 * phi[2] + 0.5 * (phi[0] - phi[1]));
-		// 			return star->kappa*tmp*star->densities(0, x, phi, dphi, ddphi)*star->area_element(x);
-		// 		}
-		// 	}
-		// } adm_energy_int(star);
-
-		// Evaluator_1D_Spec adm_energy_eval(density_extrapolation_resolution);
-		// fill_integral<Radial_Compactification>(adm_energy_eval, *this, adm_energy_int, 0);
-
-		// star->adm_energy = adm_energy_eval(partition.partition_end(0));
-		// Secant_Spec adm_energy_radius_eval(adm_energy_eval);
-		// star->radius_energy = 0.5*partition.partition_end(0);
-		// adm_energy_radius_eval.solve(&star->radius_energy, RAD_FRACTION*star->adm_energy);
-		// star->radius_energy = metric_prefactor({star->radius_energy, M_PI_2}, 0)*xc(0, &star->radius_energy);
+		delete [] xrange;
+		delete [] density_integrals;
 
 		//Printing out masses and radii
 		std::cout << "Komar mass is: " << star->params["komar_mass"] << std::endl;
 		std::cout << "Komar angular momentum is: " << star->params["komar_momentum"] << std::endl;
 		std::cout << "ADM energy is: " << star->params["adm_energy"] << std::endl;
 
-		// std::cout << "Komar radius estimate is: " << star->radius_komar << std::endl;
-		// std::cout << "Charge radius estimate is: " << star->radius_charge << std::endl;
-		// std::cout << "ADM energy radius estimate is: " << star->radius_energy << std::endl;
+		std::cout << "Komar radius estimate is: " << star->params["radius_komar"] << std::endl;
+		std::cout << "Charge radius estimate is: " << star->params["radius_charge"] << std::endl;
+		std::cout << "ADM energy radius estimate is: " << star->params["radius_adm"] << std::endl;
 
 		//Calculating maximal scalar field value
 		struct{

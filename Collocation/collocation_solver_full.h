@@ -29,12 +29,13 @@ public:
 	int iterations;
 	const Equations_Class *eq_system;
 
-private:
 	using Domain_Partitioning::n_dim;
 	using Domain_Partitioning::first_domain;
 	using Domain_Partitioning::first_bulk_domain;
 	using Domain_Partitioning::partition_start;
 	using Domain_Partitioning::partition_end;
+
+private:
 	using Collocation_Solution<Compactification>::cont;
 	using Collocation_Solution<Compactification>::pnt;
 	using Collocation_Solution<Compactification>::fill_boundary_domains;

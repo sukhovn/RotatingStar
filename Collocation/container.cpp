@@ -806,7 +806,147 @@ std::vector<double> Evaluator::integrate() const{
 	return total_sum;
 };
 
-double Evaluator::test(const Container &cont, int der){
+void Evaluator::integrate_keep_first_dimension(int n, double *xarr, double *yarr) const{
+	for(int i = 0; i < n*nfunc; ++i) yarr[i] = 0.0;
+	for(const Bulk_Domain *dom = first_bulk_domain; dom != NULL; dom = dom->next_bulk_domain()){
+		int keep_size = dom->dim_num(0);
+		double *keep_data = new double[keep_size*nfunc];
+		std::vector<std::vector<double>> part_sum(n_dim-1);
+		for(int dim = 1; dim < n_dim; ++dim)
+			part_sum[dim-1] = std::vector<double>(nfunc, 0.0);
+
+		int shift = 0, sh_factor = nfunc;
+		std::vector<int> indx(n_dim), nx_run(n_dim-1);
+		for(int dim = n_dim-1; dim > 0; --dim){
+			if((parity_st[dim].empty() || std::fabs(dom->domain_start(dim) - partition_start(dim)) > COMP_TOL) &&
+				(parity_end[dim].empty() || std::fabs(dom->domain_end(dim) - partition_end(dim)) > COMP_TOL))
+			{
+				nx_run[dim-1] = dom->dim_num(dim)/2 + dom->dim_num(dim)%2;
+				shift += 2*(nx_run[dim-1]-1)*sh_factor;
+			}
+			else{
+				nx_run[dim-1] = dom->dim_num(dim);
+				shift += (nx_run[dim-1]-1)*sh_factor;
+			}
+			indx[dim] = nx_run[dim-1]-1;
+			sh_factor *= dom->dim_num(dim);
+		}
+
+		//Iterating through the first dimension
+		for(indx[0] = keep_size-1; indx[0] >= 0; --indx[0]){
+			//Integrating over all dimensions other than the first
+			int ind = index_st[dom->bulk_domain_number] + indx[0]*sh_factor + shift;
+			while(1){
+				for(int fn = 0; fn < nfunc; ++fn){
+					if(indx[n_dim-1]){
+						if(nx_run[n_dim-2] != dom->dim_num(n_dim-1) || ((parity_st[n_dim-1].empty() || !parity_st[n_dim-1][fn]) &&
+							(parity_end[n_dim-1].empty() || !parity_end[n_dim-1][fn])))
+						{
+							part_sum[n_dim-2][fn] -= data[ind+fn]/(4.0*indx[n_dim-1]*indx[n_dim-1] - 1.0);
+						}
+						else if(indx[n_dim-1]%2 == 0)
+							part_sum[n_dim-2][fn] -= data[ind+fn]/(indx[n_dim-1]*indx[n_dim-1] - 1.0);
+					}
+					else
+						part_sum[n_dim-2][fn] += 0.5*data[ind+fn];
+				}
+
+				int dim, tmp;
+				for(dim = n_dim-1, tmp = nfunc; dim > 0; --dim){
+					--indx[dim];
+					if(nx_run[dim-1] == dom->dim_num(dim)) ind -= tmp;
+					else ind -= 2*tmp;
+					if(indx[dim] >= 0) break;
+
+					if(dim > 1){
+						for(int fn = 0; fn < nfunc; ++fn){
+							if(indx[dim-1]){
+								if(nx_run[dim-2] != dom->dim_num(dim-1) || ((parity_st[dim-1].empty() || !parity_st[dim-1][fn]) &&
+									(parity_end[dim-1].empty() || !parity_end[dim-1][fn])))
+								{
+									part_sum[dim-2][fn] -= part_sum[dim-1][fn]/(4.0*indx[dim-1]*indx[dim-1] - 1.0);
+								}
+								else if(indx[dim-1]%2 == 0)
+									part_sum[dim-2][fn] -= part_sum[dim-1][fn]/(indx[dim-1]*indx[dim-1] - 1.0);
+							}
+							else
+								part_sum[dim-2][fn] += 0.5*part_sum[dim-1][fn];
+							part_sum[dim-1][fn] = 0.0;
+						}
+					}
+
+					indx[dim] = nx_run[dim-1]-1;
+					if(nx_run[dim-1] == dom->dim_num(dim)) ind += nx_run[dim-1]*tmp;
+					else ind += 2*nx_run[dim-1]*tmp;
+					tmp *= dom->dim_num(dim);
+				}
+				if(dim == 0) break;
+			}
+
+			for(int dim = 1; dim < n_dim; ++dim){
+				double factor = dom->domain_end(dim) - dom->domain_start(dim);
+				for(int fn = 0; fn < nfunc; ++fn){
+					part_sum[0][fn] *= factor;
+					if(!parity_st[dim].empty() && parity_st[dim][fn] && std::fabs(dom->domain_start(dim) - partition_start(dim)) < COMP_TOL)
+						part_sum[0][fn] *= -0.5;
+					if(!parity_end[dim].empty() && parity_end[dim][fn] && std::fabs(dom->domain_end(dim) - partition_end(dim)) < COMP_TOL)
+						part_sum[0][fn] *= 0.5;
+				}
+			}
+			for(int fn = 0; fn < nfunc; ++fn){
+				keep_data[nfunc*indx[0]+fn] = part_sum[0][fn];
+				part_sum[0][fn] = 0.0;
+			}
+		}
+
+		//Extrapolating function to the array along the first dimension
+		double xeval, y;
+		bool oddity;
+		int i = 0;
+		while(i < n && xarr[i] <= dom->domain_end(0)+COMP_TOL){
+			if(xarr[i] < dom->domain_start(0)-COMP_TOL || (std::fabs(xarr[i] - dom->domain_start(0)) < COMP_TOL && std::fabs(dom->domain_start(0) - partition_start(0)) > COMP_TOL)){
+				++i;
+				continue;
+			}
+			for(int fn = 0; fn < nfunc; ++fn){
+				oddity = false;
+				if(!parity_st[0].empty() && std::fabs(dom->domain_start(0) - partition_start(0)) < COMP_TOL){
+					xeval = (dom->domain_start(0) - xarr[i])/(dom->domain_end(0) - dom->domain_start(0));
+					y = 2.0*xeval*xeval - 1.0;
+					if(parity_st[0][fn])
+						oddity = true;
+				}
+				else if(!parity_end[0].empty() && std::fabs(dom->domain_end(0) - partition_end(0)) < COMP_TOL){
+					xeval = (dom->domain_end(0) - xarr[i])/(dom->domain_end(0) - dom->domain_start(0));
+					y = 2.0*xeval*xeval - 1.0;
+					if(parity_end[0][fn])
+						oddity = true;
+				}
+				else{
+					y = (dom->domain_start(0) + dom->domain_end(0) - 2.0*xarr[i])/(dom->domain_end(0) - dom->domain_start(0));
+				}
+
+				double d = 0.0, dd = 0.0, sv, y2 = 2.0*y, res;
+
+				for(int j = keep_size-1; j >= 1; j--){ //Clenshaw’s recurrence.
+					sv = d;
+					d = y2 * d - dd + keep_data[nfunc*j+fn];
+					dd = sv;
+				}
+
+				if(oddity)
+					yarr[n*fn+i] += xeval*(y*d - dd + 0.5*keep_data[fn]);
+				else
+					yarr[n*fn+i] += y*d - dd + 0.5*keep_data[fn];
+			}
+			++i;
+		}
+
+		delete [] keep_data;
+	}
+}
+
+double Evaluator::test(const Container &cont, int der) const{
 	int indx = 0, i;
 	double max = 0.0, tmp;
 

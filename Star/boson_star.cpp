@@ -87,7 +87,7 @@ Boson_Star::Boson_Star(const Domain_Partitioning &part):
 	Rotating_Boson_Star_Equations(), Container(5, part),
 	pfile((const char*) __Star_solution_parameters_dat, __Star_solution_parameters_dat_len),
 	params({{"omega", 1.0}, {"komar_mass", 0.0}, {"komar_momentum", 0.0}, {"radius_charge", 0.0}, {"radius_komar", 0.0}, {"phi_max", 0.0}, {"min_gtt", 0.0}}),
-	coordinate_komar_radius(0.5*partition.partition_end(0)), ps_length(0.0)
+	ps_length(0.0)
 {
 	set_doubling_begin(0, {false, false, false, false, true});
 	set_doubling_begin(1, {false, false, false, false, true});
@@ -101,7 +101,7 @@ Boson_Star::Boson_Star(const std::string &folder_name):
 	Rotating_Boson_Star_Equations(), Container(5, get_partitioning_from_data(folder_name)),
 	pfile((const char*) __Star_solution_parameters_dat, __Star_solution_parameters_dat_len),
 	params({{"omega", 1.0}, {"komar_mass", 0.0}, {"komar_momentum", 0.0}, {"radius_charge", 0.0}, {"radius_komar", 0.0}, {"phi_max", 0.0}, {"min_gtt", 0.0}}),
-	coordinate_komar_radius(0.5*partition.partition_end(0)), ps_length(0.0)
+	ps_length(0.0)
 {
 	if(partition.n_dim != 2){
 		std::cout << "Wrong number of dimensions in partitioning" << std::endl;
@@ -113,8 +113,7 @@ Boson_Star::Boson_Star(const std::string &folder_name):
 Boson_Star::Boson_Star(const Boson_Star &star):
 	Rotating_Boson_Star_Equations(star), Container(star),
 	pfile((const char*) __Star_solution_parameters_dat, __Star_solution_parameters_dat_len),
-	params(star.params), coordinate_komar_radius(star.coordinate_komar_radius),
-	residual_error(star.residual_error), ps_length(star.ps_length) {};
+	params(star.params), residual_error(star.residual_error), ps_length(star.ps_length) {};
 
 Boson_Star &Boson_Star::operator=(const Boson_Star &star){
 	this->Rotating_Boson_Star_Equations::operator=(star);

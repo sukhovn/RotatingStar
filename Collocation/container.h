@@ -52,7 +52,9 @@ public:
 
 	std::vector<double> integrate() const;
 
-	double test(const Container &cont, int der = -1);
+	void integrate_keep_first_dimension(int n, double *xarr, double *yarr) const;
+
+	double test(const Container &cont, int der = -1) const;
 
 	friend class Container;
 };
