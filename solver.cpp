@@ -7,6 +7,7 @@
 #include <iomanip>
 
 #include <boson_star.h>
+#include <supplement.h>
 
 int main(int argc, char const *argv[]){
 	std::string folder_in;
@@ -48,9 +49,17 @@ int main(int argc, char const *argv[]){
 
 	Boson_Star star(folder_in);
 	if(!domains_file.empty()){
-		Domain_Partitioning part(domains_file);
+		Domain_Partitioning part = read_partitioning(domains_file);
+		// Domain_Partitioning part(domains_file);
+
+		std::cout << "New domains configuration:" << std::endl;
+		for(const Bulk_Domain *dom = part.first_bulk_domain; dom != NULL; dom = dom->next_bulk_domain()){
+			std::cout << "Domain: " << dom->bulk_domain_number << std::endl;
+			std::cout << *dom << std::endl;
+		}
+
 		star.regrid(part);
-		std::cout << "New solution size: " << star.size() << std::endl;
+		std::cout << "New solution size: " << star.size() << '\n' << std::endl;
 	}
 
 	Boson_Star_Solver solver(&star);
