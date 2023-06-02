@@ -58,8 +58,9 @@ public:
 	}
 
 	template<class Callable>
-	void fill_seed(Callable func, double value_at_infinity = 0.0){
+	void fill_seed(Callable func, std::vector<double> value_at_infinity = {}){
 		verify_container_solution_correspondence();
+		if(value_at_infinity.size() != cont->nfunc) value_at_infinity.resize(cont->nfunc, 0.0);
 
 		int indx = 0, dim;
 		std::vector<double> coords_comp(n_dim), coords(n_dim);
@@ -73,7 +74,7 @@ public:
 				}
 				if(dim < n_dim){
 					for(int fn = 0; fn < cont->nfunc; fn++)
-						cont->data[indx++] = value_at_infinity;
+						cont->data[indx++] = value_at_infinity[fn];
 				}
 				else{
 					for(int fn = 0; fn < cont->nfunc; fn++)
@@ -84,8 +85,9 @@ public:
 	}
 
 	template<class Callable>
-	Container evaluate_function(Callable &func, int nfunc_fill, double value_at_infinity = 0.0){
+	Container evaluate_function(Callable &func, int nfunc_fill, std::vector<double> value_at_infinity = {}){
 		verify_container_solution_correspondence();
+		if(value_at_infinity.size() != nfunc_fill) value_at_infinity.resize(nfunc_fill, 0.0);
 
 		Container result(nfunc_fill, cont->partition);
 		for(int dim = 0; dim < n_dim; ++dim){
@@ -106,7 +108,7 @@ public:
 				}
 				if(pnt.get_point(dom->bulk_domain_number, ind, true)){
 					for(int fn = 0; fn < nfunc_fill; ++fn)
-						result.data[indx++] = value_at_infinity;
+						result.data[indx++] = value_at_infinity[fn];
 				}
 				else{
 					for(int fn = 0; fn < nfunc_fill; ++fn){

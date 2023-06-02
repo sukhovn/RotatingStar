@@ -71,7 +71,9 @@ public:
 		Radial_Compactification(_star->partition),
 		Collocation_Solver_Full<Radial_Compactification, Rotating_Boson_Star_Equations>(*this, _star, _star),
 		star(_star),
-		density_extrapolation_resolution(50) {};
+		density_extrapolation_resolution(100) {};
+
+	Boson_Star *return_star_ptr(){return star;};
 
 	void change_star(Boson_Star *stari){
 		star = stari;
@@ -104,11 +106,13 @@ public:
 			return star->residuals(fn, x, phi, dphi, ddphi);
 		};
 
-		Container residuals = evaluate_function(residuals_function, 2, 0.0);
+		Container residuals = evaluate_function(residuals_function, 2, {0.0, 0.0});
 		residuals.save(folder_name + "/residuals");
+
+		plot_polar_cut(folder_name + "/plot", 200, 100);
 	}
 
-	// void plot_polar_cut(const char *folder_name, int nr, int nz);
+	void plot_polar_cut(const std::string &folder_name, int nr, int nz);
 
 	template<class Parameter_Calculator>
 	int parameter_change(Parameter_Calculator &calc, double par_new){

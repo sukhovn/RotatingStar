@@ -154,7 +154,7 @@ private:
 
 	//Lists all domains along the dimension dm, when other coordinates are fixed to be posit
 	//Also checks if the domains cover all the range from part_start[dm] to part_end[dm] and throws exception if not
-	void list_domains(int dm, std::vector<double> &posit, std::vector<Generic_Domain*> &layer) const;
+	void list_domains(int dm, std::vector<double> &posit, std::vector<const Generic_Domain*> &layer) const;
 
 	virtual Generic_Domain* load_single_domain(const std::vector<std::string> &domain_info, Generic_Domain *prev_dom);
 	virtual void load_domains(const std::string &file_name);

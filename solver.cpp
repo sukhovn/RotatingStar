@@ -6,6 +6,7 @@
 #include <string>
 #include <iomanip>
 
+#include <timer.h>
 #include <boson_star.h>
 #include <supplement.h>
 
@@ -52,11 +53,7 @@ int main(int argc, char const *argv[]){
 		Domain_Partitioning part = read_partitioning(domains_file);
 		// Domain_Partitioning part(domains_file);
 
-		std::cout << "New domains configuration:" << std::endl;
-		for(const Bulk_Domain *dom = part.first_bulk_domain; dom != NULL; dom = dom->next_bulk_domain()){
-			std::cout << "Domain: " << dom->bulk_domain_number << std::endl;
-			std::cout << *dom << std::endl;
-		}
+		std::cout << "New domains configuration:\n" << part << std::endl;
 
 		star.regrid(part);
 		std::cout << "New solution size: " << star.size() << '\n' << std::endl;
@@ -78,14 +75,19 @@ int main(int argc, char const *argv[]){
 		}
 	} sigma_calculator;
 
+	Timer timer;
+
 	if(change_sigma)
 		solver.parameter_change(sigma_calculator, sigma);
 	else
 		solver.solve();
 
+	timer.record();
+	std::cout << "The calculation took " << timer.last_period << std::endl;
+
 	if(!folder_out.empty()){
 		solver.star_save(folder_out);
-		// solver.plot_polar_cut(folder_out + "_plot", plsize, plsize);
+		solver.print_domain_2D(folder_out + "/domains.pbm");
 	}
 
 	return 0;

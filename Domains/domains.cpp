@@ -6,6 +6,7 @@
 #include <string>
 #include <iomanip>
 #include <filesystem>
+#include <unordered_set>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -54,8 +55,8 @@ bool check_adjacency(const Generic_Domain *dom1, const Generic_Domain *dom2){
 	else return true;
 }
 
-void drop_zero_volume_domains(std::vector<Generic_Domain*> &list){
-	std::vector<Generic_Domain*> new_list;
+void drop_zero_volume_domains(std::vector<const Generic_Domain*> &list){
+	std::vector<const Generic_Domain*> new_list;
 	for(int i = 0; i < list.size(); i++){
 		if(!list[i]->is_zero_volume()) new_list.push_back(list[i]);
 	}
@@ -225,7 +226,7 @@ void Generic_Domain_Partitioning::load_domains(const std::string &file_name){
 	return;
 }
 
-void Generic_Domain_Partitioning::list_domains(int dm, std::vector<double> &posit, std::vector<Generic_Domain*> &layer) const{
+void Generic_Domain_Partitioning::list_domains(int dm, std::vector<double> &posit, std::vector<const Generic_Domain*> &layer) const{
 	layer.resize(0);
 	Generic_Domain *domain_tmp = first_dom;
 
@@ -285,7 +286,7 @@ void Generic_Domain_Partitioning::list_domains(int dm, std::vector<double> &posi
 void Generic_Domain_Partitioning::verify_consistency(void) const{
 	std::vector<double> current_coord(part_start);
 	std::vector<double> next_coord(part_end);
-	std::vector<Generic_Domain*> layer;
+	std::vector<const Generic_Domain*> layer;
 
 	int dim_change = 0;
 
@@ -321,31 +322,42 @@ void Generic_Domain_Partitioning::print_domain_2D(const std::string &file_name, 
 	out.open(file_name);
 
 	int icurr = 0, inext;
-	std::vector<Generic_Domain*> layer;
+	std::vector<const Generic_Domain*> layer;
 	std::vector<double> posit(ndim);
 	for(int i = 0; i < ndim; i++){
-		if(i == dim_i || i == dim_j) continue;
+		if(i == dim_j || i == dim_i) continue;
 		posit[i] = posit_st[icurr++];
 	}
+	posit[dim_j] = part_end[dim_j];
 	posit[dim_i] = part_start[dim_i];
-	posit[dim_j] = part_start[dim_j];
 	icurr = 0;
 
 	double coord_next;
 
 	out << "P1\n" << size_x << " " << size_y << std::endl;
 
-	while(posit[dim_i] < part_end[dim_i]){
-		list_domains(dim_j, posit, layer);
-		drop_zero_volume_domains(layer);
-		int nlayer = layer.size();
+	while(posit[dim_j] > part_start[dim_j]){
+		layer.clear();
+		for(const Generic_Domain *dom = first_dom; dom != NULL; dom = dom->dom_next){
+			bool in_layer = true;
+			for(int i = 0; i < ndim; i++){
+				if(i == dim_i) continue;
+				if(posit[i] <= dom->dom_start[i] || posit[i] > dom->dom_end[i] + COMP_TOL){
+					in_layer = false;
+					break;
+				}
+			}
+			if(in_layer && !dom->is_zero_volume()) layer.push_back(dom);
+		}
+		std::sort(layer.begin(), layer.end(), [dim_i](const Generic_Domain *dom_i, const Generic_Domain *dom_j){return dom_i->dom_start[dim_i] < dom_j->dom_start[dim_i];});
 
+		int nlayer = layer.size();
 		std::vector<int> jbound(nlayer+1);
 		int ist, iend;
 
 		//Getting y boundaries
 		for(int dmi = 0; dmi < nlayer; dmi++){
-			jbound[dmi] = (int) size_y*(layer[dmi]->dom_start[dim_j] - part_start[dim_j])/(part_end[dim_j] - part_start[dim_j]);
+			jbound[dmi] = (int) size_y*(layer[dmi]->dom_start[dim_i] - part_start[dim_i])/(part_end[dim_i] - part_start[dim_i]);
 		}
 		jbound[nlayer] = size_y-1;
 
@@ -356,7 +368,7 @@ void Generic_Domain_Partitioning::print_domain_2D(const std::string &file_name, 
 		//Drawing y boundaries
 		for(int dmi = 0; dmi < nlayer; dmi++){
 			out << "1";
-			if(layer[dmi]->dom_start[dim_i] == posit[dim_i]){
+			if(layer[dmi]->dom_end[dim_j] == posit[dim_j]){
 				for(int j = jbound[dmi]+1; j < jbound[dmi+1]; j++) out << "1";
 			}
 			else{
@@ -366,11 +378,11 @@ void Generic_Domain_Partitioning::print_domain_2D(const std::string &file_name, 
 		out << "1\n";
 
 		//Getting the x coordinate of next y boundaries
-		coord_next = layer[0]->dom_end[dim_i];
+		coord_next = layer[0]->dom_start[dim_j];
 		for(int i = 1; i < layer.size(); i++)
-			if(layer[i]->dom_end[dim_i] < coord_next && layer[i]->dom_start[dim_i] != layer[i]->dom_end[dim_i])
-				coord_next = layer[i]->dom_end[dim_i]; 
-		inext = (int) size_x*(coord_next - part_start[dim_i])/(part_end[dim_i] - part_start[dim_i]);
+			if(layer[i]->dom_start[dim_j] > coord_next && layer[i]->dom_start[dim_j] != layer[i]->dom_end[dim_j])
+				coord_next = layer[i]->dom_start[dim_j];
+		inext = (int) size_x*(part_end[dim_j] - coord_next)/(part_end[dim_j] - part_start[dim_j]);
 
 		//Drawing y boundaries
 		for(int i = icurr; i < inext; i++){
@@ -381,7 +393,7 @@ void Generic_Domain_Partitioning::print_domain_2D(const std::string &file_name, 
 			out << "1\n";
 		}
 
-		posit[dim_i] = coord_next;
+		posit[dim_j] = coord_next;
 		icurr = inext;
 	}
 
@@ -406,7 +418,7 @@ void Generic_Domain_Partitioning::print_domain_3D(const std::string &folder_name
 	std::ofstream out;
 
 	int icurr = 0, inext, nplot = 0;
-	std::vector<Generic_Domain*> layer;
+	std::vector<const Generic_Domain*> layer;
 	std::vector<double> posit(part_start);
 
 	std::string file_name;
@@ -489,8 +501,12 @@ void Generic_Domain_Partitioning::print_domain_3D(const std::string &folder_name
 }
 
 void Generic_Domain_Partitioning::move_domain_wall(const std::vector<double> &wall_posit, double new_posit){
+	if(wall_posit.size() != ndim){
+		std::cout << "Wrong number of dimensions in wall position" << std::endl;
+		throw("Domain wall move fail");
+	}
 	int wall_dim_left = -1, wall_dim_right = -1;
-	std::vector<Generic_Domain *> domains_left, domains_right;
+	std::unordered_set<Generic_Domain *> domains_left, domains_right;
 	for(Generic_Domain *dom = first_dom; dom != NULL; dom = dom->dom_next){
 		bool is_inside = true;
 		for(int i = 0; i < ndim; i++){
@@ -507,8 +523,8 @@ void Generic_Domain_Partitioning::move_domain_wall(const std::vector<double> &wa
 						throw("Domain wall move fail");
 					}
 					wall_dim_right = i;
-					if(domains_right.size() == 0){
-						domains_right.push_back(dom);
+					if(domains_right.empty()){
+						domains_right.insert(dom);
 					}
 					else{
 						std::cout << "Partition is broken, the wall cannot be moved" << std::endl;
@@ -521,8 +537,8 @@ void Generic_Domain_Partitioning::move_domain_wall(const std::vector<double> &wa
 						throw("Domain wall move fail");
 					}
 					wall_dim_left = i;
-					if(domains_left.size() == 0){
-						domains_left.push_back(dom);
+					if(domains_left.empty()){
+						domains_left.insert(dom);
 					}
 					else{
 						std::cout << "Partition is broken, the wall cannot be moved" << std::endl;
@@ -532,11 +548,14 @@ void Generic_Domain_Partitioning::move_domain_wall(const std::vector<double> &wa
 			}
 		}
 	}
-	if(domains_left.size() == 0 || domains_right.size() == 0){
-		std::cout << "The outer boundary cannot be moved" << std::endl;
+	if((domains_left.empty() && domains_right.empty()) || (wall_dim_left == -1 && wall_dim_right == -1)){
+		std::cout << "Domain boundary not found" << std::endl;
 		throw("Domain wall move fail");
 	}
-	if(wall_dim_left < 0 || wall_dim_right < 0 || wall_dim_left != wall_dim_right){
+	if((wall_dim_left < 0 && std::fabs(part_start[wall_dim_right] - wall_posit[wall_dim_right]) > COMP_TOL) ||
+		(wall_dim_right < 0 && std::fabs(part_end[wall_dim_left] - wall_posit[wall_dim_left]) > COMP_TOL) ||
+		(wall_dim_left >= 0 && wall_dim_right >= 0 && wall_dim_left != wall_dim_right))
+	{
 		std::cout << "Partition is broken, the wall cannot be moved" << std::endl;
 		throw("Domain wall move fail");
 	}
@@ -544,44 +563,32 @@ void Generic_Domain_Partitioning::move_domain_wall(const std::vector<double> &wa
 	while(1){
 		bool is_added = false;
 		for(Generic_Domain *dom = first_dom; dom != NULL; dom = dom->dom_next){
-			if(std::fabs(dom->dom_end[wall_dim_left] - wall_posit[wall_dim_left]) < COMP_TOL){
-				bool is_adjacent = false, is_old = false;
-				for(int i = 0; i < domains_left.size(); i++){
-					if(dom == domains_left[i]){
-						is_old = true;
-						break;
-					}
-				}
-				if(is_old) continue;
-				for(int i = 0; i < domains_right.size(); i++){
-					if(check_adjacency(dom, domains_right[i])){
+			if(wall_dim_left >= 0 && std::fabs(dom->dom_end[wall_dim_left] - wall_posit[wall_dim_left]) < COMP_TOL){
+				bool is_adjacent = false;
+				if(domains_left.count(dom)) continue;
+				for(Generic_Domain *dom_right : domains_right){
+					if(check_adjacency(dom, dom_right)){
 						is_adjacent = true;
 						break;
 					}
 				}
 				if(is_adjacent)
-					domains_left.push_back(dom);
+					domains_left.insert(dom);
 			}
 		}
 
 		for(Generic_Domain *dom = first_dom; dom != NULL; dom = dom->dom_next){
-			if(std::fabs(dom->dom_start[wall_dim_left] - wall_posit[wall_dim_left]) < COMP_TOL){
-				bool is_adjacent = false, is_old = false;
-				for(int i = 0; i < domains_right.size(); i++){
-					if(dom == domains_right[i]){
-						is_old = true;
-						break;
-					}
-				}
-				if(is_old) continue;
-				for(int i = 0; i < domains_left.size(); i++){
-					if(check_adjacency(dom, domains_left[i])){
+			if(wall_dim_right >= 0 && std::fabs(dom->dom_start[wall_dim_right] - wall_posit[wall_dim_right]) < COMP_TOL){
+				bool is_adjacent = false;
+				if(domains_right.count(dom)) continue;
+				for(Generic_Domain *dom_left : domains_left){
+					if(check_adjacency(dom, dom_left)){
 						is_adjacent = true;
 						break;
 					}
 				}
 				if(is_adjacent){
-					domains_right.push_back(dom);
+					domains_right.insert(dom);
 					is_added = true;
 				}
 			}
@@ -590,23 +597,28 @@ void Generic_Domain_Partitioning::move_domain_wall(const std::vector<double> &wa
 		if(!is_added) break;
 	}
 
-	for(int i = 0; i < domains_left.size(); i++){
-		if(new_posit - (domains_left[i])->dom_start[wall_dim_left] <= 0.0){
+	for(Generic_Domain *dom_left : domains_left){
+		if(new_posit - dom_left->dom_start[wall_dim_left] <= 0.0){
 			std::cout << "Attempted domain move destroys one of the domains" << std::endl;
 			throw("Domain wall move fail");
 		}
 	}
-	for(int i = 0; i < domains_right.size(); i++){
-		if(new_posit - (domains_right[i])->dom_end[wall_dim_left] >= 0.0){
+	for(Generic_Domain *dom_right : domains_right){
+		if(new_posit - dom_right->dom_end[wall_dim_right] >= 0.0){
 			std::cout << "Attempted domain move destroys one of the domains" << std::endl;
 			throw("Domain wall move fail");
 		}
 	}
 
-	for(int i = 0; i < domains_left.size(); i++)
-		(domains_left[i])->dom_end[wall_dim_left] = new_posit;
-	for(int i = 0; i < domains_right.size(); i++)
-		(domains_right[i])->dom_start[wall_dim_left] = new_posit;
+	for(Generic_Domain *dom_left : domains_left){
+		dom_left->dom_end[wall_dim_left] = new_posit;
+	}
+	for(Generic_Domain *dom_right : domains_right){
+		dom_right->dom_start[wall_dim_right] = new_posit;
+	}
+
+	if(wall_dim_left == -1) part_start[wall_dim_right] = new_posit;
+	if(wall_dim_right == -1) part_end[wall_dim_left] = new_posit;
 
 	Generic_Domain_Partitioning::verify_ordering();
 	verify_consistency();

@@ -306,7 +306,7 @@ public:
 		return vals[0];
 	}
 
-	void save_simplex(const char *file_name) const{
+	void save_simplex(const std::string &file_name) const{
 		std::ofstream out_x;
 		out_x.open(file_name);
 		out_x << "vertex,";
@@ -323,7 +323,7 @@ public:
 		return;
 	}
 
-	void load_simplex(const char *file_name){
+	void load_simplex(const std::string &file_name){
 		std::ifstream file(file_name);
 		if(!file){
 			std::cout << "No input file in load_simplex\n";
@@ -386,7 +386,7 @@ public:
 		sort_points();
 	}
 
-	double minimize_track_csv(const char *file_name, bool messages = true){
+	double minimize_track_csv(const std::string &file_name, bool messages = true){
 		int i;
 		std::ofstream out_x;
 		out_x.open(file_name);

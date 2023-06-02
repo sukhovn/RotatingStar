@@ -76,7 +76,7 @@ public:
 	}
 
 	//Diagnostic routine that keeps track of all the steps
-	double minimize_track_csv(const char *file_name, bool messages = true){
+	double minimize_track_csv(const std::string &file_name, bool messages = true){
 		double res = Nelder_Mead::minimize_track_csv(file_name, messages);
 		spec_min_x = x_array[0];
 		spec_min_val = vals[0];

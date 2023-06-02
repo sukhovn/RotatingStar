@@ -122,7 +122,6 @@ public:
 		if(sz != tmp->sz) return false;
 		return true;
 	}
-
 };
 
 class Boundary_Domain: public Generic_Domain{
@@ -621,7 +620,7 @@ public:
 		else return true;
 	}
 
-	//Finds bulk domain by point
+	//Finds domain by number
 	const Bulk_Domain* operator()(const std::vector<double> &posit) const{
 		for(const Bulk_Domain *domain_tmp = first_bulk_dom; domain_tmp != NULL; domain_tmp = domain_tmp->dom_bulk_next){
 			bool is_inside = true;
@@ -641,6 +640,20 @@ public:
 		return const_cast<Bulk_Domain*>((*const_cast<const Domain_Partitioning*>(this))(posit));
 	}
 
+	//Finds bulk domain by point
+	const Bulk_Domain* operator()(int domain_number) const{
+		for(const Bulk_Domain *domain_tmp = first_bulk_dom; domain_tmp != NULL; domain_tmp = domain_tmp->dom_bulk_next){
+			if(domain_tmp->b_dom_number == domain_number)
+				return domain_tmp;
+		}
+		std::cout << "The point is not inside any of the domains\n";
+		throw("The point is not inside any of the domains");
+	}
+
+	Bulk_Domain* operator()(int domain_number){
+		return const_cast<Bulk_Domain*>((*const_cast<const Domain_Partitioning*>(this))(domain_number));
+	}
+
 	//Splits domains into two at some postition after the start
 	void domain_split(const std::vector<double> &posit, int split_dim){
 		if(boundary_domains_inserted){
@@ -656,6 +669,25 @@ public:
 			throw("Domain wall move only works on partitions with no boundary domains");
 		}
 		Generic_Domain_Partitioning::move_domain_wall(wall_posit, new_posit);
+	}
+
+	int total_number_of_points() const{
+		int total_size = 0;
+		for(const Bulk_Domain *dom = first_bulk_dom; dom != NULL; dom = dom->dom_bulk_next)
+			total_size += dom->size;
+		return total_size;
+	}
+
+	void change_domain_resolution(int domain_number, const std::vector<int> &new_n){
+		if(boundary_domains_inserted){
+			std::cout << "Domain resolution can only be changed on partitions with no boundary domains" << std::endl;
+			throw("Domain resolution can only be changed on partitions with no boundary domains");
+		}
+		Bulk_Domain *dom = (*this)(domain_number);
+		dom->dim_n = new_n;
+		int sz = 1;
+		for(int i = 0; i < ndim; i++) sz *= new_n[i];
+		dom->sz = sz;
 	}
 
 	void change_domain_resolution(const std::vector<double> &wall_posit, const std::vector<int> &new_n){

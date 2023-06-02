@@ -17,6 +17,7 @@ public:
 		int ndomains = 0;
 		xst = part.partition_start(0);
 		double xend = part.partition_end(0);
+		domains_compactified.clear();
 		for(const Bulk_Domain *dom = part.first_bulk_domain; dom != NULL; dom = dom->next_bulk_domain()){
 			if(dom->domain_start(0) > xst) xst = dom->domain_start(0);
 			++ndomains;

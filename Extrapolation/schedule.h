@@ -31,8 +31,15 @@ public:
 		std::string::size_type sztp;
 
 		while(std::getline(file, line)){
+			for(char c : line){//Skipping commented lines
+				if(c == ' ') continue;
+				if(c == '#') line = "";
+				else break;
+			}
+
 			if(line.size() == 0)
 				continue;
+
 			std::istringstream iss(line);
 			std::getline(iss, token, ':');
 

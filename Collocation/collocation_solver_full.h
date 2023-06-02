@@ -19,7 +19,8 @@
 #define STPMX 100.0 //Maximal Newton step
 
 #define COLLOC_THRSHLD 1.0e-12
-#define MAX_ITER 100 //Limit for maximal number of iterations
+#define SOL_THRSHLD 1.0e-11
+#define MAX_ITER 10 //Limit for maximal number of iterations
 
 template<class Compactification, class Equations_Class>
 class Collocation_Solver_Full: public Collocation_Solution<Compactification>{
@@ -27,6 +28,7 @@ public:
 	Collocation_Matrix colm;
 	double eqn_error;
 	int iterations;
+	int iterations_total;
 	const Equations_Class *eq_system;
 
 	using Domain_Partitioning::n_dim;
@@ -549,8 +551,9 @@ private:
 					tmpi /= bulk->dim_num(i);
 				}
 				for(int fn = 0; fn < cont->nfunc; fn++){
-					temp = std::fabs(colm.delta(colm.index(bulk->bulk_domain_number, ind, fn)))/FMAX(std::fabs(cont->data[itr++]), 1.0);
+					temp = std::fabs(colm.delta(colm.index(bulk->bulk_domain_number, ind, fn)))/FMAX(std::fabs(cont->data[itr]), 1.0);
 					if(temp > test) test = temp;
+					++itr;
 				}
 			}
 		}
@@ -572,7 +575,7 @@ private:
 				eqn_error = fc;
 				return 0;
 			}
-	//		std::cout << "Continuing Lambda search\n";
+			// std::cout << "Continuing Lambda search" << std::endl;
 
 			alam2 = alam1;
 			f2 = f1;
@@ -631,9 +634,9 @@ private:
 
 		code = lnsearch(stepmax);
 
-		iterations++;
+		++iterations_total;
 
-		return 0;//code;
+		return code;
 	}
 
 public:
@@ -649,21 +652,28 @@ public:
 
 		stepmax = STPMX*FMAX(std::sqrt(cont->norm()), (double) cont->size());
 		iterations = 0;
+		iterations_total = 0;
 
 		for(int i = 0; i < MAX_ITER; i++){
 			code = iteration(stepmax);
 			err = std::sqrt(2.0*eqn_error)/(1.0*colm.size());
+			if(err > SOL_THRSHLD) ++iterations;
 			std::cout << "Step is done, the error is: " << std::scientific << err << std::endl;
 			if(err < COLLOC_THRSHLD){
+				++iterations;
 				std::cout << "Calculation is done, the error is: " << std::scientific << err << std::endl;
-				std::cout << "Number of iterations is: " << iterations << "\n" << std::endl;
+				std::cout << "Number of iterations is: " << iterations << std::endl;
+				std::cout << "Total number of iterations is: " << iterations_total << "\n" << std::endl;
 				std::cout.copyfmt(oldState);
 				return 0;
 			}
 			if(code != 0){
+				++iterations;
 				std::cout << "Reached the minimal newton step, the error is: " << std::scientific << err << std::endl;
-				std::cout << "Number of iterations is: " << iterations << "\n" << std::endl;
+				std::cout << "Number of iterations is: " << iterations << std::endl;
+				std::cout << "Total number of iterations is: " << iterations_total << "\n" << std::endl;
 				std::cout.copyfmt(oldState);
+				if(err < SOL_THRSHLD) return 0;
 				return 1;
 			}
 		}

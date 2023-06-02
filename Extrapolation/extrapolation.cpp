@@ -242,6 +242,7 @@ void Extrapolation::load_tracing_state(const std::string &folder_name){
 	std::cout << "Continuing tracing from pseudolength: " << sol_current->ps_length << std::endl;
 
 	//Loading multiplication coefficient
+	mult_coef_max = 1.0 + stepper_increment;
 	mult_coef = 0.0;
 	fails = -1;
 	easy_steps = -1;
@@ -394,10 +395,11 @@ int Extrapolation::regrid_solutions(const Domain_Partitioning &part_new){
 	std::cout << std::endl;
 
 	std::cout << "New domains configuration:" << std::endl;
-	for(const Bulk_Domain *dom = part_new.first_bulk_domain; dom != NULL; dom = dom->next_bulk_domain()){
-		std::cout << "Domain: " << dom->bulk_domain_number << std::endl;
-		std::cout << *dom << std::endl;
-	}
+	std::cout << part_new << std::endl;
+	// for(const Bulk_Domain *dom = part_new.first_bulk_domain; dom != NULL; dom = dom->next_bulk_domain()){
+	// 	std::cout << "Domain: " << dom->bulk_domain_number << std::endl;
+	// 	std::cout << *dom << std::endl;
+	// }
 	adjust_compactification(part_new, true);
 
 	Boson_Star **sol_backup = new Boson_Star*[sol_num];
@@ -472,17 +474,17 @@ int Extrapolation::param_change(double param_new){
 				std::cout << '-';
 			std::cout << std::endl;
 
-			if(iterations > 2){
+			if(iterations > 4){
 				mult_coef = std::sqrt(mult_coef);
 				std::cout << "Too many iterations, changing multiplication coefficient to " << mult_coef << "\n";
 			}
 			param_last = sol_current->ps_length;
 
-			if(iterations == 1) easy_steps++;
+			if(iterations < 3) easy_steps++;
 			else easy_steps = 0;
 
-			for(auto cond = conditions.begin(); cond != conditions.end(); ++cond)
-				(*cond)->check_condition(*this);
+			for(Extrapolation_Condition *cond : conditions)
+				cond->check_condition(*this);
 		}
 
 		//No further extrapolation termination

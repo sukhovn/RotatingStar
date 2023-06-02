@@ -209,7 +209,7 @@ void Boson_Star_Solver::find_star_parameters(void){
 		return std::exp(0.5*(phi[0] - phi[1]));
 	};
 
-	Evaluator metric_prefactor(evaluate_function(factor_function, 1, 1.0));
+	Evaluator metric_prefactor(evaluate_function(factor_function, 1, {1.0}));
 
 	//Calculating density functions
 	auto density_function = [this](int fn, double *x, double *phi, double **dphi, double **ddphi)
@@ -221,7 +221,7 @@ void Boson_Star_Solver::find_star_parameters(void){
 		return star->kappa*factor*star->densities(fn, x, phi, dphi, ddphi)*star->area_element(x)*dxc_factor(xc_inv(0, x));
 	};
 
-	Container densities = evaluate_function(density_function, 3, 0.0);
+	Container densities = evaluate_function(density_function, 3, {0.0, 0.0, 0.0});
 	densities.set_doubling_begin(0, {false, false, false});
 	densities.set_doubling_begin(1, {true, true, true});
 	Evaluator densities_eval(densities);
@@ -299,7 +299,7 @@ void Boson_Star_Solver::find_star_parameters(void){
 		}
 	} neg_phi;
 
-	Container sc_field = evaluate_function(neg_phi,1,0.0);
+	Container sc_field = evaluate_function(neg_phi, 1, {0.0});
 	sc_field.set_doubling_begin(0, {true});
 	sc_field.set_doubling_begin(1, {true});
 	Evaluator sc_field_eval(sc_field);
@@ -327,7 +327,7 @@ void Boson_Star_Solver::find_star_parameters(void){
 		}
 	} g_tt_function;
 
-	Container g_tt = evaluate_function(g_tt_function,1,1.0);
+	Container g_tt = evaluate_function(g_tt_function, 1, {1.0});
 	g_tt.set_doubling_begin(0, {false});
 	g_tt.set_doubling_begin(1, {false});
 	Evaluator g_tt_eval(g_tt);
@@ -343,57 +343,73 @@ void Boson_Star_Solver::find_star_parameters(void){
 		std::cout << "The star does not have an ergoregion" << std::endl;
 }
 
-// void Boson_Star_Solver::plot_polar_cut(const char *folder_name, int nr, int nz){
-// 	struct stat sttus = {0};
-// 	if (stat(folder_name, &sttus) == -1) {
-// 		mkdir(folder_name, 0700);
-// 	}
+void Boson_Star_Solver::plot_polar_cut(const std::string &folder_name, int nr, int nz){
+	struct stat sttus = {0};
+	if(stat(folder_name.c_str(), &sttus) == -1){
+		mkdir(folder_name.c_str(), 0700);
+	}
 
-// 	Evaluator eval(*star);
-// 	int n_func = star->number_of_functions();
-// 	double rad = 1.5*star->radius_komar;
-// 	double dr = 2.0*rad/(1.0*(nr-1));
-// 	double dz = 2.0*rad/(1.0*(nz-1));
+	struct{
+		double operator()(int fn, double *x, double *phi, double **dphi, double **ddphi){
+			if(fn == 0)
+				return phi[4];
+			double tmp = x[0]*std::sin(x[1])*phi[3];
+			return std::exp(phi[0]+phi[1]) - std::exp(phi[0]-phi[1])*tmp*tmp;
+		}
+	} functions_plot;
 
-// 	std::ofstream out_coords;
-// 	std::ofstream *out_f = new std::ofstream[n_func];
-// 	std::string file_name;
+	std::ofstream out_coords(folder_name + "/coords.dat");
+	int nfplot = 1;
+	std::vector<std::ofstream> out_f(1);
+	out_f[0].open(folder_name + "/field.dat");
+	std::vector<double> inf_val = {0.0};
+	if(star->params["min_gtt"] < 0){
+		nfplot = 2;
+		inf_val = {0.0, 1.0};
+		out_f.push_back(std::ofstream(folder_name + "/g_tt.dat"));
+	}
 
-// 	file_name = std::string(folder_name) + "/coords.dat";
-// 	out_coords.open(file_name);
-// 	for(int fn = 0; fn < n_func; fn++){
-// 		file_name = std::string(folder_name) + "/f" + std::to_string(fn) + ".dat";
-// 		out_f[fn].open(file_name);
-// 		out_f[fn] << std::setprecision(15) << std::fixed;
-// 	}
+	Container plot_functions = evaluate_function(functions_plot, nfplot, inf_val);
+	if(nfplot == 1){
+		plot_functions.set_doubling_begin(0, {true});
+		plot_functions.set_doubling_begin(1, {true});
+	}
+	else{
+		plot_functions.set_doubling_begin(0, {true, false});
+		plot_functions.set_doubling_begin(1, {true, false});
+	}
+	// plot_functions.save(folder_name);
+	Evaluator eval(plot_functions);
 
-// 	double rc, zc;
-// 	std::vector<double> coord(2);
+	double rad = 1.5*star->params["radius_komar"];
+	double dr = 2.0*rad/(1.0*(nr-1));
+	double dz = 2.0*rad/(1.0*(nz-1));
 
-// 	for(int i = 0; i < nr-1; i++)
-// 		out_coords << -rad + i*dr << ",";
-// 	out_coords << rad << std::endl;
-// 	for(int i = 0; i < nz-1; i++)
-// 		out_coords << - rad + i*dz << ",";
-// 	out_coords << rad << std::endl;
+	for(std::ofstream &ofs : out_f)
+		ofs << std::setprecision(15) << std::fixed;
 
-// 	for(int i = 0; i < nz; i++){
-// 		zc = - rad + i*dz;
-// 		for(int j = 0; j < nr; j++){
-// 			rc = -rad + j*dr;
-// 			coord[0] = std::sqrt(rc*rc + zc*zc);
-// 			coord[1] = std::asin(std::fabs(zc/coord[0]));
-// 			coord[0] = xc_inv(0, &(coord[0]));
-// 			for(int fn = 0; fn < n_func; fn++){
-// 				out_f[fn] << eval(coord, fn);
-// 				if(j != nr-1) out_f[fn] << ",";
-// 				else out_f[fn] << std::endl;
-// 			}
-// 		}
-// 	}
+	double rc, zc;
+	std::vector<double> coord(2);
 
-// 	for(int fn = 0; fn < n_func; fn++)
-// 		out_f[fn].close();
-// 	delete [] out_f;
-// 	out_coords.close();
-// }
+	for(int i = 0; i < nr-1; i++)
+		out_coords << -rad + i*dr << ",";
+	out_coords << rad << std::endl;
+	for(int i = 0; i < nz-1; i++)
+		out_coords << - rad + i*dz << ",";
+	out_coords << rad << std::endl;
+
+	for(int i = 0; i < nz; i++){
+		zc = - rad + i*dz;
+		for(int j = 0; j < nr; j++){
+			rc = -rad + j*dr;
+			coord[0] = std::sqrt(rc*rc + zc*zc);
+			coord[1] = std::asin(std::fabs(zc/coord[0]));
+			coord[0] = xc_inv(0, &(coord[0]));
+			for(int fn = 0; fn < nfplot; fn++){
+				out_f[fn] << eval(coord, fn);
+				if(j != nr-1) out_f[fn] << ",";
+				else out_f[fn] << std::endl;
+			}
+		}
+	}
+}

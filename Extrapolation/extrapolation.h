@@ -5,6 +5,7 @@
 #include <math.h>
 
 #include <boson_star.h>
+#include <supplement.h>
 
 #ifndef EXTRAPOLATION_H
 #define EXTRAPOLATION_H
@@ -113,7 +114,7 @@ public:
 
 struct Extrapolation_Condition{
 	virtual void check_condition(Extrapolation &extra) = 0;
-	virtual void final_action(Extrapolation &extra, bool normal_exit) = 0;
+	virtual void final_action(Extrapolation &extra, bool normal_exit){return;}
 };
 
 #endif
