@@ -82,6 +82,7 @@ public:
 	}
 
 	void find_star_parameters(void);
+	void find_gh_moments(bool find_sub = false, const std::string &save_file = "");
 
 	int solve(void){
 		std::cout << "Solving star equations" << std::endl;
@@ -94,6 +95,7 @@ public:
 		std::cout << "Second residual maximum is: " << star->residual_error[1] << std::endl;
 
 		find_star_parameters();
+		find_gh_moments();
 		return 0;
 	}
 
@@ -108,6 +110,8 @@ public:
 
 		Container residuals = evaluate_function(residuals_function, 2, {0.0, 0.0});
 		residuals.save(folder_name + "/residuals");
+
+		// find_gh_moments(true, folder_name);
 
 		plot_polar_cut(folder_name + "/plot", 200, 100);
 	}

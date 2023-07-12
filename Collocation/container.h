@@ -286,8 +286,8 @@ public:
 	void save(const std::string &folder_name) const;
 	void load(const std::string &folder_name);
 
-	template<class Compactification>
-	void regrid(const Domain_Partitioning &part_new, const Compactification &comp_old, const Compactification &comp_new, double value_at_infinity = 0.0){
+	template<class Compactification1, class Compactification2>
+	void regrid(const Domain_Partitioning &part_new, const Compactification1 &comp_old, const Compactification2 &comp_new, double value_at_infinity = 0.0){
 		if(part_new.n_dim != n_dim){
 			std::cout << "Regrid cannot change dimensions" << std::endl;
 			throw("Regrid dimension change");
@@ -296,7 +296,7 @@ public:
 		Domain_Partitioning part(part_new);
 		if(part.boundary_domains_present()) part.clear_boundary_domains();
 
-		if(this->compare_bulk_domains(part)){
+		if(this->compare_bulk_domains(part) && std::is_same<Compactification1,Compactification2>::value){
 			std::cout << "No container regridding is needed" << std::endl;
 			return;
 		}

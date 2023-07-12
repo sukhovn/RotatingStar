@@ -5,7 +5,6 @@
 #ifndef EQUATIONS_H
 #define EQUATIONS_H
 
-
 class Radial_Compactification{
 private:
 	double xst;
@@ -264,10 +263,40 @@ public:
 				throw("Wrong density number");
 				break;
 		}
-}
+	}
 
 	double area_element(double *x) const{
 		return x[0]*x[0]*std::sin(x[1]);
+	}
+
+	double jacoby_p(unsigned int n, double a, double x) const{
+		if(n == 0) return 1.0;
+		if(n == 1) return 1.0 + 0.5*a + 0.5*(a + 2.0)*(x - 1.0);
+		double p0 = 1.0, p1 = 1.0 + 0.5*a + 0.5*(a + 2.0)*(x - 1.0), tmp;
+		for(int i = 2; i <= n; ++i){
+			tmp = (2*i+a)*((2*i+a-1)*x*p1 - 0.5*(2*i+a-2)*p0)/(2.0*i*(i+a));
+			p0 = p1;
+			p1 = tmp;
+		}
+		return p1;
+	}
+
+	double rho_mode(unsigned n, double *x, double *phi){
+		double sin_th = sin(x[1]), cos_th = cos(x[1]);
+		return 2.0*(2.0*n+1.0)/2.0*phi[1]*jacoby_p(n, 0, cos_th)*sin_th;
+	}
+
+	double b_mode(unsigned n, double *x, double *phi){
+		double sin_th = sin(x[1]), cos_th = cos(x[1]);
+		double result = 2.0*(n+1.0)*(exp(phi[0])-1.0)*jacoby_p(n, 1, cos_th)*sin_th*sin_th/M_PI;
+		for(int i = 0; i < n; ++i)//Multiplying by the normalization factor
+			result *= (i + 1.0)*(i + 2.0)/((i + 1.5)*(i + 1.5));
+		return 2.0*result;
+	}
+
+	double omega_mode(unsigned n, double *x, double *phi){
+		double sin_th = sin(x[1]), cos_th = cos(x[1]);
+		return 2.0*(2.0*n+3.0)*(n+2.0)/(8.0*(n+1.0))*phi[3]*jacoby_p(n, 2, cos_th)*sin_th*sin_th*sin_th;
 	}
 };
 

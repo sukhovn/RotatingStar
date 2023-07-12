@@ -41,6 +41,10 @@ void Boson_Star::read_parameters(const Parameter_File &reader){
 		params["radius_komar"] = reader[shift+6];
 		params["phi_max"] = reader[shift+7];
 		params["min_gtt"] = reader[shift+8];
+		params["M2"] = reader[shift+9];
+		params["S3"] = reader[shift+10];
+		// params["M4"] = reader[shift+11];
+		// params["S5"] = reader[shift+12];
 	}
 }
 
@@ -81,12 +85,17 @@ void Boson_Star::record_parameters(Parameter_File &reader){
 	reader[shift+6] = params["radius_komar"];
 	reader[shift+7] = params["phi_max"];
 	reader[shift+8] = params["min_gtt"];
+	reader[shift+9] = params["M2"];
+	reader[shift+10] = params["S3"];
+	// reader[shift+11] = params["M4"];
+	// reader[shift+12] = params["S5"];
 }
 
 Boson_Star::Boson_Star(const Domain_Partitioning &part):
 	Rotating_Boson_Star_Equations(), Container(5, part),
 	pfile((const char*) __Star_solution_parameters_dat, __Star_solution_parameters_dat_len),
-	params({{"omega", 1.0}, {"komar_mass", 0.0}, {"komar_momentum", 0.0}, {"radius_charge", 0.0}, {"radius_komar", 0.0}, {"phi_max", 0.0}, {"min_gtt", 0.0}}),
+	params({{"omega", 1.0}, {"komar_mass", 0.0}, {"komar_momentum", 0.0}, {"radius_charge", 0.0}, {"radius_komar", 0.0}, {"phi_max", 0.0}, {"min_gtt", 0.0},
+			{"M2", 0.0}, {"S3", 0.0}}),
 	ps_length(0.0)
 {
 	set_doubling_begin(0, {false, false, false, false, true});
@@ -100,7 +109,8 @@ Boson_Star::Boson_Star(const Domain_Partitioning &part):
 Boson_Star::Boson_Star(const std::string &folder_name):
 	Rotating_Boson_Star_Equations(), Container(5, get_partitioning_from_data(folder_name)),
 	pfile((const char*) __Star_solution_parameters_dat, __Star_solution_parameters_dat_len),
-	params({{"omega", 1.0}, {"komar_mass", 0.0}, {"komar_momentum", 0.0}, {"radius_charge", 0.0}, {"radius_komar", 0.0}, {"phi_max", 0.0}, {"min_gtt", 0.0}}),
+	params({{"omega", 1.0}, {"komar_mass", 0.0}, {"komar_momentum", 0.0}, {"radius_charge", 0.0}, {"radius_komar", 0.0}, {"phi_max", 0.0}, {"min_gtt", 0.0},
+			{"M2", 0.0}, {"S3", 0.0}}),
 	ps_length(0.0)
 {
 	if(partition.n_dim != 2){
@@ -341,6 +351,193 @@ void Boson_Star_Solver::find_star_parameters(void){
 		std::cout << "The star has an ergoregion" << std::endl;
 	else
 		std::cout << "The star does not have an ergoregion" << std::endl;
+}
+
+void Boson_Star_Solver::find_gh_moments(bool find_sub, const std::string &save_folder){
+	double xend = 10.0*star->params["radius_komar"];
+	double xst = 0.9*xend;
+
+	auto multipole_function = [this](int fn, double *x, double *phi, double **dphi, double **ddphi)
+	{
+		if(x[0] == 0.0 || x[1] == 0) return 0.0;
+		switch(fn){
+			case 0:
+				return star->b_mode(0, x, phi);
+				break;
+			case 1:
+				return star->rho_mode(2, x, phi);
+				break;
+			case 2:
+				return star->omega_mode(2, x, phi);
+				break;
+			case 3:
+				return star->b_mode(2, x, phi);
+				break;
+			case 4:
+				return star->rho_mode(4, x, phi);
+				break;
+			case 5:
+				return star->omega_mode(4, x, phi);
+				break;
+			default:
+				std::cout << "Wrong function number" << std::endl;
+				throw("wrong function number");
+				break;
+		}
+	};
+
+	auto estimate_zero = [](int n, double *x, double *y){
+		double xs = 0.0, ys = 0.0, x2 = 0.0, y2 = 0.0, xy = 0.0;
+		for(int i = 0; i < n; ++i){
+			xs += x[i];
+			ys += y[i];
+			x2 += x[i]*x[i];
+			y2 += y[i]*y[i];
+			xy += x[i]*y[i];
+		}
+		double beta_est = (ys*x2 - xs*xy)/(n*x2 - xs*xs);
+		double sigma_est = (n*xy*xy - 2*xs*ys*xy + x2*ys*ys + y2*xs*xs - n*x2*y2)/(n*xs*xs - n*n*x2);
+		double beta_err = sigma_est*x2/(n*x2 - xs*xs);
+		double err = std::sqrt(std::fabs(beta_err/(beta_est*beta_est)));
+		return std::make_pair(beta_est, err);
+	};
+
+	int n_asymptotics = 3;
+	if(find_sub){
+		n_asymptotics = 6;
+	}
+
+	Container multipoles = evaluate_function(multipole_function, n_asymptotics);
+	if(find_sub){
+		multipoles.set_doubling_begin(0, {false, false, false, false, false, false});
+		multipoles.set_doubling_begin(1, {false, true, true, false, true, true});
+	}
+	else{
+		multipoles.set_doubling_begin(0, {false, false, false});
+		multipoles.set_doubling_begin(1, {false, true, true});
+	}
+	Evaluator multipoles_eval(multipoles);
+
+	int int_size = 11;
+	double *xrange = new double[int_size];
+	for(int i = 0; i < int_size; ++i){
+		double tmp = xst + (xend - xst)/(1.0*(int_size-1))*i;
+		xrange[i] = xc_inv(0, &tmp);
+	}
+	double *density_integrals = new double[n_asymptotics*int_size];
+	multipoles_eval.integrate_keep_first_dimension(int_size, xrange, density_integrals);
+
+	//Rescaling functions
+	for(int i = 0; i < int_size; ++i){
+		xrange[i] = xst + (xend - xst)/(1.0*(int_size-1))*i;
+		density_integrals[i] *= std::pow(xrange[i], 2);
+		density_integrals[int_size+i] *= std::pow(xrange[i], 3);
+		density_integrals[2*int_size+i] *= std::pow(xrange[i], 5);
+		if(find_sub){
+			density_integrals[3*int_size+i] *= std::pow(xrange[i], 4);
+			density_integrals[4*int_size+i] *= std::pow(xrange[i], 5);
+			density_integrals[5*int_size+i] *= std::pow(xrange[i], 7);
+		}
+	}
+
+	if(!save_folder.empty()){
+		std::ofstream file(save_folder + "/moment_functions.csv");
+		if(find_sub)
+			file << "r,b0,rho2,omega2,b2,rho4,omega4" << std::endl;
+		else
+			file << "r,b0,rho2,omega2" << std::endl;
+		for(int i = 0; i < int_size; ++i){
+			file << xrange[i];
+			for(int fn = 0; fn < n_asymptotics; ++fn)
+				file << ',' << density_integrals[fn*int_size+i];
+			file << std::endl;
+		}
+	}
+
+	for(int i = 0; i < int_size; ++i) xrange[i] = 1.0/xrange[i];
+
+	double M = star->params["komar_mass"];
+	double J = -star->params["komar_momentum"];
+	std::pair<double, double> asym_coef;
+	double B0, rho2, omega2;
+
+	asym_coef = estimate_zero(int_size, xrange, density_integrals);
+	if(asym_coef.second > 0.001){
+		std::cout << "B0 coefficient estimation error is " << asym_coef.second << std::endl;
+		std::cout << "Couldn't estimate B0 coefficient\nCouldn't estimate leading GH moments" << std::endl;
+		return;
+	}
+	else B0 = asym_coef.first;
+
+	asym_coef = estimate_zero(int_size, xrange, density_integrals+int_size);
+	if(asym_coef.second > 0.001){
+		std::cout << "rho2 coefficient estimation error is " << asym_coef.second << std::endl;
+		std::cout << "Couldn't estimate rho2 coefficient\nCouldn't estimate leading GH moments" << std::endl;
+		return;
+	}
+	else rho2 = asym_coef.first;
+
+	asym_coef = estimate_zero(int_size, xrange, density_integrals+2*int_size);
+	if(asym_coef.second > 0.001){
+		std::cout << "omega2 coefficient estimation error is " << asym_coef.second << std::endl;
+		std::cout << "Couldn't estimate omega2 coefficient\nCouldn't estimate leading GH moments" << std::endl;
+		return;
+	}
+	else omega2 = asym_coef.first;
+
+	double M2 = 0.5*rho2 + M*(M*M + 4.0*B0)/3.0;
+	double S3 = -0.75*omega2 + 3.0*J*(M*M + 4.0*B0)/5.0;
+	M2 /= J*J/M;
+	S3 /= J*J*J/(M*M);
+
+	star->params["M2"] = M2;
+	star->params["S3"] = S3;
+
+	std::cout << "Reduced multipole moment M2: " << star->params["M2"] << std::endl;
+	std::cout << "Reduced multipole moment S3: " << star->params["S3"] << std::endl;
+
+	if(find_sub){
+		double B2, rho4, omega4;
+
+		asym_coef = estimate_zero(int_size, xrange, density_integrals+3*int_size);
+		if(asym_coef.second > 0.001){
+			std::cout << "B2 coefficient estimation error is " << asym_coef.second << std::endl;
+			std::cout << "Couldn't estimate B2 coefficient\nCouldn't estimate subleading GH moments" << std::endl;
+			return;
+		}
+		else B2 = asym_coef.first;
+
+		asym_coef = estimate_zero(int_size, xrange, density_integrals+4*int_size);
+		if(asym_coef.second > 0.001){
+			std::cout << "rho4 coefficient estimation error is " << asym_coef.second << std::endl;
+			std::cout << "Couldn't estimate rho4 coefficient\nCouldn't estimate subleading GH moments" << std::endl;
+			return;
+		}
+		else rho4 = asym_coef.first;
+
+		asym_coef = estimate_zero(int_size, xrange, density_integrals+5*int_size);
+		if(asym_coef.second > 0.001){
+			std::cout << "omega4 coefficient estimation error is " << asym_coef.second << std::endl;
+			std::cout << "Couldn't estimate omega4 coefficient\nCouldn't estimate subleading GH moments" << std::endl;
+			return;
+		}
+		else omega4 = asym_coef.first;
+
+		double M4 = 16.0*B0*B0*M/5.0 - 8.0*B2*M/7.0 - 6.0*J*J*M/35.0 + 32.0*B0*M*M*M/21.0 + 19.0*std::pow(M, 5)/105.0 + 12.0*B0*rho2/7.0 + 4.0*M*M*rho2/7.0 - rho4/2.0;
+		double S5 = 48.0*B0*B0*J/7.0 - 40.0*B2*J/21.0 - 2.0*J*J*J/7.0 + 208.0/63.0*B0*J*M*M + 25.0*J*std::pow(M, 4)/63.0 + 5.0*J*M*rho2/21.0 - 10.0*B0*omega2/3.0 - 5.0*M*M*omega2/6.0 + 5.0*omega4/6.0;
+
+		M4 /= J*J*J*J/(M*M*M);
+		S5 /= J*J*J*J*J/(M*M*M*M);
+
+		star->params["M4"] = M4;
+		star->params["S5"] = S5;
+
+		std::cout << "Reduced multipole moment M4: " << star->params["M4"] << std::endl;
+		std::cout << "Reduced multipole moment S5: " << star->params["S5"] << std::endl;
+	}
+
+	delete [] xrange;
+	delete [] density_integrals;
 }
 
 void Boson_Star_Solver::plot_polar_cut(const std::string &folder_name, int nr, int nz){
