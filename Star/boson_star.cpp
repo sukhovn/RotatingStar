@@ -98,8 +98,10 @@ Boson_Star::Boson_Star(const Domain_Partitioning &part):
 			{"M2", 0.0}, {"S3", 0.0}}),
 	ps_length(0.0)
 {
-	set_doubling_begin(0, {false, false, false, false, true});
-	set_doubling_begin(1, {false, false, false, false, true});
+	if(std::fabs(part.partition_start(0) - 0.0) < 1.0e-10)
+		set_doubling_begin(0, {false, false, false, false, true});
+	if(std::fabs(part.partition_start(1) - 0.0) < 1.0e-10)
+		set_doubling_begin(1, {false, false, false, false, true});
 	if(partition.n_dim != 2){
 		std::cout << "Wrong number of dimensions in partitioning" << std::endl;
 		throw("Wrong number of dimensions in partitioning");
@@ -500,9 +502,11 @@ void Boson_Star_Solver::find_gh_moments(bool find_sub, const std::string &save_f
 		double B2, rho4, omega4;
 
 		asym_coef = estimate_zero(int_size, xrange, density_integrals+3*int_size);
-		if(asym_coef.second > 0.001){
+		if(std::fabs(asym_coef.first) > 1.0e-10 && asym_coef.second > 0.001){
 			std::cout << "B2 coefficient estimation error is " << asym_coef.second << std::endl;
 			std::cout << "Couldn't estimate B2 coefficient\nCouldn't estimate subleading GH moments" << std::endl;
+			star->params["M4"] = 0.0;
+			star->params["S5"] = 0.0;
 			return;
 		}
 		else B2 = asym_coef.first;
@@ -511,6 +515,8 @@ void Boson_Star_Solver::find_gh_moments(bool find_sub, const std::string &save_f
 		if(asym_coef.second > 0.001){
 			std::cout << "rho4 coefficient estimation error is " << asym_coef.second << std::endl;
 			std::cout << "Couldn't estimate rho4 coefficient\nCouldn't estimate subleading GH moments" << std::endl;
+			star->params["M4"] = 0.0;
+			star->params["S5"] = 0.0;
 			return;
 		}
 		else rho4 = asym_coef.first;
@@ -519,6 +525,8 @@ void Boson_Star_Solver::find_gh_moments(bool find_sub, const std::string &save_f
 		if(asym_coef.second > 0.001){
 			std::cout << "omega4 coefficient estimation error is " << asym_coef.second << std::endl;
 			std::cout << "Couldn't estimate omega4 coefficient\nCouldn't estimate subleading GH moments" << std::endl;
+			star->params["M4"] = 0.0;
+			star->params["S5"] = 0.0;
 			return;
 		}
 		else omega4 = asym_coef.first;

@@ -79,12 +79,18 @@ prog_initial: $(BINARIES) obj/initial.o
 	${CC} -o initial $(BINARIES) obj/initial.o $(LINKERFLAG)
 
 prog_solver: $(BINARIES) obj/solver.o
-	@echo "Linking the solver solver..."
+	@echo "Linking the multidomain solver..."
 	${CC} -o solver $(BINARIES) obj/solver.o $(LINKERFLAG)
 
 prog_extrapolator: $(BINARIES) obj/extrapolator.o
 	@echo "Linking the extrapolator..."
 	${CC} -o extrapolator $(BINARIES) obj/extrapolator.o $(LINKERFLAG)
+
+kerr_test: $(DOMAINS_BINS) $(ROUTINES_BINS) $(COLLOCATION_BINS) $(STAR_CODE_BINS)
+	@echo "Compiling the Kerr test..."
+	${CC} ${CFLAGS} -o obj/kerr_test.o kerr_test.cpp
+	@echo "Linking the Kerr test..."
+	${CC} -o kerr_test $(DOMAINS_BINS) $(ROUTINES_BINS) $(COLLOCATION_BINS) $(STAR_CODE_BINS) obj/kerr_test.o $(LINKERFLAG)
 
 clean:
 	@echo "Cleaning up..."
@@ -92,3 +98,4 @@ clean:
 	rm -vf initial
 	rm -vf solver
 	rm -vf extrapolator
+	rm -vf kerr_test
